@@ -1,0 +1,5 @@
+{
+  "name": "ToolHubSetup",
+  "entry": "ToolHubSetup.pyw",
+  "pyinstaller": []
+}
