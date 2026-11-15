@@ -11,7 +11,6 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 import tempfile
 import threading
 import time
@@ -231,8 +230,9 @@ class Setup(tk.Tk):
             if not self.py:
                 raise RuntimeError("Python-Installation fehlgeschlagen:\n" + (r.stderr or r.stdout)[-600:])
         except (OSError, RuntimeError) as e:
-            self.after(0, lambda: (messagebox.showerror("Python", f"{e}\n\nTipp: „Als .exe“ wählen."),
-                                   self.btn.config(state="normal")))
+            # Python deletes e when the except block ends, before after() runs the callback.
+            message = f"{e}\n\nTipp: „Als .exe“ wählen."
+            self.after(0, lambda: (messagebox.showerror("Python", message), self.btn.config(state="normal")))
             return
         self._run("python")
 
@@ -244,7 +244,8 @@ class Setup(tk.Tk):
         try:
             cmd = install(mode, self.desktop.get(), self.log, self.progress)
         except Exception as e:  # noqa: BLE001
-            self.after(0, lambda: (messagebox.showerror("Setup", str(e)), self.btn.config(state="normal")))
+            message = str(e)  # e is gone once the except block ends, see _install_python
+            self.after(0, lambda: (messagebox.showerror("Setup", message), self.btn.config(state="normal")))
             return
 
         def done():
