@@ -5,7 +5,9 @@ import io
 import json
 import os
 import tempfile
+import types
 import unittest
+import urllib.error
 import zipfile
 from pathlib import Path
 from unittest import mock
@@ -94,6 +96,47 @@ class InstallTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "Ungültiges Archiv"):
                 self.install("python")
         self.assertFalse(any(self.root.rglob("evil.txt")))
+
+
+class ErrorDialogTest(unittest.TestCase):
+    """The window shows errors later via after(), when the except block has already ended."""
+
+    def setUp(self) -> None:
+        self.button_states: list[str] = []
+        self.pending: list = []
+        self.window = types.SimpleNamespace(
+            py=None,
+            desktop=types.SimpleNamespace(get=lambda: False),
+            log=lambda _text: None,
+            progress=lambda _value: None,
+            # Queued like the Tk event loop does; run_pending() runs them once the handler has returned.
+            after=lambda _delay, callback: self.pending.append(callback),
+            btn=types.SimpleNamespace(config=lambda state: self.button_states.append(state)),
+        )
+        dialog = mock.patch.object(setup.messagebox, "showerror")
+        self.showerror = dialog.start()
+        self.addCleanup(dialog.stop)
+
+    def run_pending(self) -> None:
+        for callback in self.pending:
+            callback()
+
+    def test_failed_download_is_shown_and_button_enabled_again(self) -> None:
+        offline = urllib.error.URLError("no network")
+        with mock.patch.object(setup, "get", side_effect=offline):
+            setup.Setup._run(self.window, "exe")
+        self.run_pending()
+        self.showerror.assert_called_once_with("Setup", str(offline))
+        self.assertEqual(self.button_states, ["normal"])
+
+    def test_failed_python_install_is_shown_and_button_enabled_again(self) -> None:
+        with mock.patch.object(setup.subprocess, "run", side_effect=FileNotFoundError("winget missing")):
+            setup.Setup._install_python(self.window)
+        self.run_pending()
+        title, message = self.showerror.call_args.args
+        self.assertEqual(title, "Python")
+        self.assertIn("winget missing", message)
+        self.assertEqual(self.button_states, ["normal"])
 
 
 if __name__ == "__main__":
