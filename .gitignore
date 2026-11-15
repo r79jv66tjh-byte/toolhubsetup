@@ -3,3 +3,5 @@ build/
 dist/
 __pycache__/
 *.spec
+# Claude Code hooks and agents are installed per user, never in this public repository
+.claude/
